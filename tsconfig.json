@@ -9,5 +9,8 @@
         "declaration": true,
         "emitDeclarationOnly": true,
         "outDir": "types",
+        "checkJs": true,
+        "target": "ES6",
+        "moduleResolution": "node"
     }
 }

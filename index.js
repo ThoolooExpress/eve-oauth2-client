@@ -6,6 +6,35 @@ const Url = require("url-parse");
 const jwt = require("jsonwebtoken");
 const JwksRsa = require("jwks-rsa");
 
+/**
+ * @typedef {Object} Login
+ * @property {string} url       - The URL your EVE login button should use
+ * @property {string} state     - The state you must saved for the callback
+ * @property {string} clearCode - The clearCode you must save for the callback
+ */
+
+/**
+* @typedef {Object} ResultCallback
+* @property {string|null} accessToken
+* @property {string|null} refreshToken
+* @property {number|null} expiresIn
+* @property {array|null} scopes
+* @property {string|null} owner
+* @property {string|null} characterName
+* @property {string|null} characterID
+* @property {object} raw
+* @property {object} raw.token
+* @property {object} raw.jwt
+*/
+
+/**
+* @typedef {Object} ResultRefresh
+* @property {string|null} accessToken
+* @property {string|null} refreshToken
+* @property {number|null} expiresIn
+* @property {object} raw
+* @property {object} raw.token
+*/
 
 const LOGIN_URI = 'https://login.eveonline.com/v2/oauth/authorize/';
 const TOKEN_URI = 'https://login.eveonline.com/v2/oauth/token';
@@ -19,14 +48,6 @@ class SsoProvider {
   constructor(clientID) {
     this._clientID = clientID;
   }
-
-  /**
-   * @typedef {Object} Login
-   * @property {string} url       - The URL your EVE login button should use
-   * @property {string} state     - The state you must saved for the callback
-   * @property {string} clearCode - The clearCode you must save for the callback
-   */
-
   /**
    * Returns all the fields needed to start the authentication process.
    *
@@ -41,10 +62,10 @@ class SsoProvider {
 
     return {
       url: this._getLoginUri(
-          callbackUrl,
-          scopes,
-          loginStateString,
-          clearCodeChallenge
+        callbackUrl,
+        scopes,
+        loginStateString,
+        clearCodeChallenge
       ),
       state: loginStateString,
       clearCode: clearCodeChallenge
@@ -52,27 +73,13 @@ class SsoProvider {
   }
 
   /**
-   * @typedef {Object} ResultCallback
-   * @property {string|null} accessToken
-   * @property {string|null} refreshToken
-   * @property {number|null} expiresIn
-   * @property {array|null} scopes
-   * @property {string|null} owner
-   * @property {string|null} characterName
-   * @property {string|null} characterID
-   * @property {object} raw
-   * @property {object} raw.token
-   * @property {object} raw.jwt
-   */
-
-  /**
    * Returns the all the authentication information.
    *
    * @param {string} url            - The url of the current window, needed for
    *                                  extracting the query parameters.
-   * @param {string} savedState     - state string saved previously
-   * @param {string} savedClearCode - clear code saved previously
-   * @return {ResultCallback}
+   * @param {string?} savedState     - state string saved previously
+   * @param {string?} savedClearCode - clear code saved previously
+   * @return {Promise<ResultCallback>}
    */
   async handleCallback(url, savedState, savedClearCode) {
     let params = this._extractParams(url);
@@ -92,8 +99,8 @@ class SsoProvider {
     });
 
     let getKey = (header, callback) => {
-      client.getSigningKey(header.kid, function(err, key) {
-        let signingKey = key.publicKey || key.rsaPublicKey;
+      client.getSigningKey(header.kid, function (err, key) {
+        let signingKey = key.getPublicKey();
         callback(null, signingKey);
       });
     }
@@ -101,16 +108,16 @@ class SsoProvider {
     const readFilePromise = () => {
       return new Promise((resolve, reject) => {
         jwt.verify(
-            token['access_token'],
-            getKey,
-            {},
-            function(err, decoded) {
-              if (err) {
-                return reject(err);
-              }
-
-              resolve(decoded);
+          token['access_token'],
+          getKey,
+          {},
+          function (err, decoded) {
+            if (err) {
+              return reject(err);
             }
+
+            resolve(decoded);
+          }
         );
       })
     }
@@ -137,19 +144,10 @@ class SsoProvider {
   }
 
   /**
-   * @typedef {Object} ResultRefresh
-   * @property {string|null} accessToken
-   * @property {string|null} refreshToken
-   * @property {number|null} expiresIn
-   * @property {object} raw
-   * @property {object} raw.token
-   */
-
-  /**
    * Returns a new access token from the given refresh token
    *
    * @param {string} refreshToken
-   * @return {ResultRefresh}
+   * @return {Promise<ResultRefresh>}
    */
   async refresh(refreshToken) {
     let token = await this._fetchRefreshToken(refreshToken);
@@ -211,24 +209,24 @@ class SsoProvider {
       },
       body: bodyToSend
     })
-    .then(response => {
-      if (response.ok) {
-        return response.json();
-      }
-
-      /* To have access to the error message provided by the API we must first
-         resolve the promise, simply throwing an error would prevent that. */
-
-      return Promise.resolve(response.json())
-      .then(responseInJson => {
-        let errorMessageProperty = 'error_description';
-        if (!responseInJson.hasOwnProperty(errorMessageProperty)) {
-          throw Error(responseInJson);
+      .then(response => {
+        if (response.ok) {
+          return response.json();
         }
 
-        return Promise.reject(responseInJson[errorMessageProperty]);
+        /* To have access to the error message provided by the API we must first
+           resolve the promise, simply throwing an error would prevent that. */
+
+        return Promise.resolve(response.json())
+          .then(responseInJson => {
+            let errorMessageProperty = 'error_description';
+            if (!responseInJson.hasOwnProperty(errorMessageProperty)) {
+              throw Error(responseInJson);
+            }
+
+            return Promise.reject(responseInJson[errorMessageProperty]);
+          });
       });
-    });
   }
 
   _getFirstFetchFormData(code, codeVerifier) {
@@ -267,11 +265,11 @@ class SsoProvider {
       let propertyValue = params[property];
       if (Array.isArray(propertyValue)) {
         propertyValue.forEach(
-            (element, index) => {
-              if (index > 0) query += '%20';
+          (element, index) => {
+            if (index > 0) query += '%20';
 
-              query += element;
-            }
+            query += element;
+          }
         );
       } else {
         query += propertyValue;
