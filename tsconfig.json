@@ -1,0 +1,13 @@
+{
+    "include": [
+        "index.js"
+    ],
+    "compilerOptions": {
+        // Tells TypeScript to read JS files
+        "allowJs": true,
+        // Generate d.ts files
+        "declaration": true,
+        "emitDeclarationOnly": true,
+        "outDir": "types",
+    }
+}
